@@ -1,0 +1,12 @@
+node_modules/
+*.tgz
+*.log
+*.tmp
+.DS_Store
+
+# 本地交接笔记（压缩上下文用），不发布
+STATE.md
+
+# 本地自测产物：临时实例的截图/日志
+e2e-out/
+tmp/

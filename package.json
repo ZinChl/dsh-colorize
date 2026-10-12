@@ -1,0 +1,69 @@
+{
+  "name": "dsh-colorize",
+  "version": "0.5.3",
+  "description": "DeepSeek Harness 的界面调色插件：快捷键进入拾色模式，点选界面上任意元素就地改色（元素级 CSS 规则 + 主题 token 层，空闲零轮询）。Hotkey-driven UI colorizer for DSH.",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "dsh.plugin.json",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "README_EN.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "docs",
+    "scripts"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "scripts": {
+    "test": "node --test",
+    "test:watch": "node --test --watch",
+    "check:manifest": "node scripts/check-manifest.mjs",
+    "check": "node --check index.js && node --check client.js && node --check scripts/check-manifest.mjs && node scripts/check-manifest.mjs && node --test"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "plugin",
+    "bundle",
+    "client-plugin",
+    "theme",
+    "color",
+    "colorize",
+    "customization",
+    "css"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ZinChl/dsh-colorize.git"
+  },
+  "homepage": "https://github.com/ZinChl/dsh-colorize#readme",
+  "bugs": {
+    "url": "https://github.com/ZinChl/dsh-colorize/issues"
+  },
+  "license": "MIT",
+  "author": "dw0x",
+  "icon": "./icon.svg"
+}

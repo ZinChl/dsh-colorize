@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "UI Colorizer",
+    "description": "Press a hotkey, click any element in the interface, and recolor it in place. Element edits persist as CSS rules, semantic colors go through the theme token layer, and nothing polls while idle."
+  },
+  "entryLabel": "UI Colorizer"
+}

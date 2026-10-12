@@ -1,0 +1,8 @@
+# dsh-colorize bundle layer.
+#
+# The whole feature lives in the browser half (client.js). The Host row exists so
+# the package is a normal bundle entry a profile can enable or disable by id; it
+# registers nothing.
+- insert:
+    - id: colorize
+      name: dsh-colorize
