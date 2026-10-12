@@ -1,0 +1,52 @@
+name: Bug 报告
+description: 改色没生效、面板/快捷键异常、和文档说的不一样
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请先看 [docs/troubleshooting.md](https://github.com/ZinChl/dsh-colorize/blob/main/docs/troubleshooting.md)。
+        **规则原文**（`document.getElementById('dsh-colorize-overrides').textContent`）和
+        **面板标题里的版本号**（`vX.Y.Z`）是最有力的证据，能省掉一轮来回。
+  - type: input
+    id: panel-version
+    attributes:
+      label: 面板标题的版本号
+      description: '面板右上角 `vX.Y.Z`，或控制台 `window.__dshColorize.state().version`'
+    validations:
+      required: true
+  - type: input
+    id: dsh-version
+    attributes:
+      label: DSH 版本
+      description: '`dsh --version` 的输出'
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: 浏览器 / 系统
+      description: 例如 'Chrome 154 / Windows 11'
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 发生了什么
+      description: 期望行为 vs 实际行为，附上规则原文与 `window.__dshColorize.state()` 的输出
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 拾取哪个元素（选择器）、点了哪一行、用了调色盘还是混合器
+    validations:
+      required: true
+  - type: textarea
+    id: console
+    attributes:
+      label: 控制台输出
+      description: 有没有 error / warn（请贴原文，不要只写「没有报错」）
+    validations:
+      required: false

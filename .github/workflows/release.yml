@@ -1,0 +1,66 @@
+name: Release
+
+# 打 tag 即发版：跑完整门禁 → 打包 → 建 GitHub Release 并附上 tarball。
+# 本插件**不发布 npm**，发布物就是 release 资产：
+#   dsh plugin --profile web add https://github.com/ZinChl/dsh-colorize/releases/download/v0.5.3/dsh-colorize-0.5.3.tgz
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      # tag 与 package.json 必须一致，否则资产名会和 tag 对不上。
+      - name: Tag matches package.json version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          VERSION="$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "$VERSION" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match package.json version $VERSION"
+            exit 1
+          fi
+
+      - name: Gates (syntax + manifest + unit tests)
+        run: npm run check
+
+      - name: Pack the installable tarball
+        run: |
+          npm pack
+          ls -la dsh-colorize-*.tgz
+          sha256sum dsh-colorize-*.tgz > SHA256SUMS
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # 有 docs/releases/<tag>.md 就用它当正式 release notes，
+          # 否则退回 GitHub 自动生成的条目。
+          NOTES="docs/releases/${GITHUB_REF_NAME}.md"
+          if [ -f "$NOTES" ]; then
+            gh release create "$GITHUB_REF_NAME" \
+              --title "$GITHUB_REF_NAME" \
+              --notes-file "$NOTES" \
+              dsh-colorize-*.tgz SHA256SUMS
+          else
+            echo "::warning::$NOTES not found, falling back to --generate-notes"
+            gh release create "$GITHUB_REF_NAME" \
+              --title "$GITHUB_REF_NAME" \
+              --generate-notes \
+              dsh-colorize-*.tgz SHA256SUMS
+          fi
