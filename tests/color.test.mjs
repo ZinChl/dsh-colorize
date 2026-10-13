@@ -51,7 +51,7 @@ function loadInternals() {
   return exports.__internals
 }
 
-const { parseColor, toHex, toHexAlpha, toCss, carriesAlpha, colorKey, ruleId } = loadInternals()
+const { parseColor, toHex, toHexAlpha, toCss, carriesAlpha, colorKey, ruleId, alphaForEdit, opaqueIfEmpty } = loadInternals()
 
 test('parseColor understands every notation the fields accept', () => {
   // 展开成宿主 realm 的普通对象再比：`client.js` 是在 vm 里求值的，原型不同。
@@ -94,13 +94,32 @@ test('toHexAlpha is what makes transparency visible in the row', () => {
 })
 
 test('a hex written with an alpha wins; a plain hex keeps the row opacity', () => {
-  // HexField/ColorEditor 的分支判断就是这一句。
-  const decide = (raw, current) => (carriesAlpha(raw) ? parseColor(raw).a : current)
+  const decide = (raw, current) => alphaForEdit(parseColor(raw) || { a: 1 }, current, raw)
   assert.equal(decide('#22a2b880', 1), 128 / 255)
   assert.equal(decide('#22a2b8', 0.4), 0.4)
   assert.equal(decide('#f0a8', 1), 136 / 255)
   assert.equal(decide('rgba(1, 2, 3, 0.25)', 1), 0.25)
   assert.equal(decide('rgb(1, 2, 3)', 0.4), 0.4)
+})
+
+test('a colour typed into an empty (0%) slot starts opaque', () => {
+  // 回归：透明元素（新的「背景 · 当前透明」行、未被覆盖的 token）过去会把 0% 当成
+  // 「用户想要的透明度」，于是输入颜色后什么都不显示 —— 看起来就是「背景还是改不了」。
+  assert.equal(alphaForEdit(parseColor('#123456'), 0, '#123456'), 1)
+  assert.equal(alphaForEdit(parseColor('rgb(18, 52, 86)'), 0, 'rgb(18, 52, 86)'), 1)
+  // 显式写了 alpha 仍然以输入为准，哪怕行内是 0。
+  assert.equal(alphaForEdit(parseColor('#12345680'), 0, '#12345680'), 128 / 255)
+  // 行内非 0 时照旧保留（这就是 0.5.2/0.5.3 的契约）。
+  assert.equal(alphaForEdit(parseColor('#123456'), 0.4, '#123456'), 0.4)
+})
+
+test('opaqueIfEmpty only rewrites the empty slot', () => {
+  assert.equal(opaqueIfEmpty(parseColor('rgba(0, 0, 0, 0)')).a, 1)
+  assert.deepEqual({ ...opaqueIfEmpty(parseColor('rgba(1, 2, 3, 0.4)')) }, { r: 1, g: 2, b: 3, a: 0.4 })
+  assert.equal(opaqueIfEmpty(null), null)
+  // 有点颜色的 0% 也是空位：用户要的是「这个色，但现在是透明的」。
+  assert.equal(opaqueIfEmpty(parseColor('#12345600')).a, 1)
+  assert.equal(opaqueIfEmpty(parseColor('#12345600')).r, 18)
 })
 
 test('carriesAlpha only fires on real alpha carriers', () => {

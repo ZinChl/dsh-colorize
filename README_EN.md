@@ -26,7 +26,7 @@ zero-size React mount.
 | **Inline editing** | Every row edits `HEX` and opacity (0–100) in place, no editor needed. Opacity survives a hex edit, and a translucent colour shows as `#rrggbbaa` |
 | **Bulk** | Scope: this element / N same-class / element + descendants — existing rules move with the scope |
 | **Semantic colours** | When a colour equals a `--dsw-alias-*` token, editing it goes through `theme.overrideTokens`, so the whole UI follows |
-| **Background triage** | Rows for 「含背景图」, `::before` / `::after`, the visible ancestor, and the covering child |
+| **Background triage** | Rows for 「含背景图」, `::before` / `::after`, the visible ancestor, and the covering child. A transparent element still gets its own `背景 · 当前透明` row, so its background is always editable |
 | **Persistence** | Rules live in `localStorage`; the plugin page edits/removes them one by one, and imports/exports JSON |
 
 ## Install

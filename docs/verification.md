@@ -69,6 +69,19 @@ localStorage.getItem('dsh-colorize:v1')
 | 语义色行内不透明度填 25 | token `rgba(0, 0, 0, 0.25)`；`getComputedStyle(document.body).getPropertyValue('--dsw-alias-bg-base')` 同步 |
 | 应用范围切到「含后代 / 同类」 | 规则搬到新选择器，旧 id 消失，只有一个规则 |
 
+### 背景行（0.5.4 起，回归必测）
+
+用一个**自己透明、子元素也不铺满**的容器（会话滚动区就是）：
+
+| 操作 | 期望（0.5.4 实测值） |
+| --- | --- |
+| 拾取它 | 行里必须有 `背景 · 当前透明`（以及可能的 `背景 · 祖先 <tag.class>`）—— **绝不出现「只有文字一行」** |
+| 在「当前透明」行输入 6 位 hex `#123456` | 规则 `div.<scroll> { background-color: #123456 !important; }`；`getComputedStyle(el).backgroundColor` = `rgb(18, 52, 86)`（不是 `rgba(...,0)`）；行内显示 `#123456 / 100` |
+| 从「当前透明」行打开编辑器 | 起手 `R=18 G=52 B=86 A=100%`；拖 R 到 90 → `rgb(90, 52, 86)` |
+| 在「祖先」行改 `#3fa46a` | 规则落在祖先选择器上（实测 `[data-phase="hero"]`），祖先计算值 `rgb(63, 164, 106)`，被点的元素保持透明 |
+| 自己画背景的元素（如 `div.<x>_root`） | 只有一行 `背景`，不会多出「当前透明」 |
+| 透明容器 + 铺满且上色的子元素 | 出现 `背景 · 子元素 div.<x>_card`（旧优先级没被破坏） |
+
 ### 拾色性能
 
 `window.__dshColorize.pickPerf()` 不是 API；性能用 DevTools Performance 面板量：

@@ -1,6 +1,6 @@
 {
   "id": "dsh-colorize",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "main": "index.js",
   "description": "界面调色师：快捷键进入拾色模式，点选界面上任意元素就地改色 —— 元素级改动存成 CSS 规则、语义色走主题 token 层，空闲零轮询",
   "engines": {

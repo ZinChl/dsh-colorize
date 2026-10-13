@@ -1,6 +1,6 @@
 {
   "name": "dsh-colorize",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "description": "DeepSeek Harness 的界面调色插件：快捷键进入拾色模式，点选界面上任意元素就地改色（元素级 CSS 规则 + 主题 token 层，空闲零轮询）。Hotkey-driven UI colorizer for DSH.",
   "type": "module",
   "main": "index.js",

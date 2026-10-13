@@ -51,7 +51,7 @@ window.__ModuleLoader__.load({
     const PACKAGE_ID = 'dsh-colorize'
     const NS = 'colorize'
     /** Shown in the panel header so it is obvious which build the page is running. */
-    const VERSION = '0.5.3'
+    const VERSION = '0.5.4'
     const STORAGE_KEY = 'dsh-colorize:v1'
     const MARK = 'data-dsh-colorize'
     const Z_LAYER = 2147483000
@@ -104,6 +104,7 @@ window.__ModuleLoader__.load({
       cancel: '取消',
       done: '完成',
       withImage: '含背景图',
+      transparentRow: '当前透明',
       childPaint: '子元素',
       ancestorPaint: '祖先',
       overriddenByRule: '已被更高优先级的样式覆盖（颜色写进去了但看不到）',
@@ -174,6 +175,7 @@ window.__ModuleLoader__.load({
       cancel: 'Cancel',
       done: 'Done',
       withImage: 'has image',
+      transparentRow: 'currently transparent',
       childPaint: 'child',
       ancestorPaint: 'ancestor',
       overriddenByRule: 'A higher-priority rule wins (the value is written but invisible)',
@@ -319,6 +321,29 @@ window.__ModuleLoader__.load({
       const body = value.slice(open + 1, value.lastIndexOf(')'))
       if (body.indexOf('/') >= 0) return true
       return body.split(/[\s,]+/).filter((part) => part !== '').length > 3
+    }
+
+    /**
+     * The alpha a hex edit should end up with.
+     *
+     * * the input carries its own alpha (`#rrggbbaa`, `rgba(...)`) → that one wins;
+     * * otherwise the row's current opacity is kept…
+     * * …**unless it is 0**. 0 % is not a colour, it is an empty slot: a transparent element
+     *   (背景行「当前透明」、没被覆盖的 token) starts at `rgba(0, 0, 0, 0)`, and keeping that 0
+     *   means the colour the user just typed renders as nothing at all — which reads as
+     *   "the background still cannot be changed". A colour typed into an empty slot starts
+     *   opaque; the opacity field is right there to dial it back down.
+     */
+    function alphaForEdit(parsed, current, raw) {
+      if (carriesAlpha(raw)) return parsed.a
+      if (Number.isFinite(current) && current > 0) return current
+      return parsed.a
+    }
+
+    /** A fully transparent colour is an empty slot, not a chosen transparency. */
+    function opaqueIfEmpty(color) {
+      if (color === null || color === undefined) return color
+      return color.a === 0 ? Object.assign({}, color, { a: 1 }) : color
     }
 
     /** Identity used to compare two computed colors regardless of notation. */
@@ -985,7 +1010,9 @@ window.__ModuleLoader__.load({
     function ancestorBackground(el, baseSelector) {
       let node = el.parentElement
       let guard = 0
-      while (node && node.nodeType === 1 && guard < 6) {
+      // 12 层：DSH 的会话视图 + 插件包装夹出来常常是 8～10 层，6 层会够不到画背景的那一层
+      // （够不到时面板就没有「背景 · 祖先」行，用户只能看到本元素那一行）。
+      while (node && node.nodeType === 1 && guard < 12) {
         guard += 1
         if (String(node.tagName || '').toLowerCase() === 'html') break
         const cs = window.getComputedStyle(node)
@@ -1018,7 +1045,7 @@ window.__ModuleLoader__.load({
       const box = el.getBoundingClientRect()
       const area = box.width * box.height
       if (area < 200) return null
-      const limit = Math.min(el.children.length, 10)
+      const limit = Math.min(el.children.length, 20)
       for (let index = 0; index < limit; index += 1) {
         const child = el.children[index]
         if (!child || child.nodeType !== 1) continue
@@ -1076,6 +1103,32 @@ window.__ModuleLoader__.load({
       }
       const selfHasBackground = props.some((entry) => entry.prop === 'background-color')
       const child = coveringChildBackground(el, base)
+      const ancestor = child !== null || selfHasBackground === true ? null : ancestorBackground(el, base)
+      if (ancestor !== null) {
+        props.unshift({
+          prop: 'background-color',
+          value: ancestor.value,
+          target: { selector: ancestor.selector, label: ancestor.label, scope: 'ancestor' },
+          clearImage: ancestor.clearImage,
+        })
+      }
+      /**
+       * Element 自己透明时**也要给一行背景**。
+       *
+       * 曾经只在「发现某个祖先/子元素在画背景」时才给背景行，于是在层级更深的 DOM 里
+       * （祖先超出探测范围、又没有铺满的直接子元素）面板会**一行背景都没有** —— 用户想改
+       * 背景却无从下手，只能反复反馈「背景还是改不了」。面板是唯一入口，不能靠猜。
+       *
+       * 透明元素自己上背景色是可见的（画在祖先之上），所以这一行不是摆设。
+       */
+      if (selfHasBackground !== true) {
+        props.splice(ancestor === null ? 0 : 1, 0, {
+          prop: 'background-color',
+          value: typeof cs.backgroundColor === 'string' && cs.backgroundColor !== '' ? cs.backgroundColor : 'rgba(0, 0, 0, 0)',
+          target: self,
+          transparentSelf: true,
+        })
+      }
       if (child !== null) {
         props.push({
           prop: 'background-color',
@@ -1083,16 +1136,6 @@ window.__ModuleLoader__.load({
           target: { selector: child.selector, label: child.label, scope: 'child' },
           clearImage: child.clearImage,
         })
-      } else if (selfHasBackground !== true) {
-        const ancestor = ancestorBackground(el, base)
-        if (ancestor !== null) {
-          props.unshift({
-            prop: 'background-color',
-            value: ancestor.value,
-            target: { selector: ancestor.selector, label: ancestor.label, scope: 'ancestor' },
-            clearImage: ancestor.clearImage,
-          })
-        }
       }
 
       let background = null
@@ -1434,9 +1477,8 @@ window.__ModuleLoader__.load({
           setText(value)
           return
         }
-        // An alpha written in the field (`#74fafb66`, `rgba(...)`) wins; otherwise the row's
-        // current opacity is carried through, so editing the hex never resets it.
-        const kept = carriesAlpha(raw) ? parsed.a : Number.isFinite(alpha) ? alpha : parsed.a
+        // 输入里写了 alpha 就以它为准；否则沿用行内当前不透明度（但 0% 视为空位，见 alphaForEdit）。
+        const kept = alphaForEdit(parsed, alpha, raw)
         onCommit({ r: parsed.r, g: parsed.g, b: parsed.b, a: kept })
       }
       return h('input', {
@@ -1525,7 +1567,9 @@ window.__ModuleLoader__.load({
      * which is exactly what the raw `<input type="color">` could not provide.
      */
     function ColorEditor({ from, onLive, onConfirm, onCancel, scopes, scopeId, onScope }) {
-      const start = parseColor(from) || { r: 0, g: 0, b: 0, a: 1 }
+      // 从「空位」（全透明）打开时按 100% 起手：否则拖 R/G/B 会写 rgba(r,g,b,0)，
+      // 用户看到的就是「颜色改了没反应」。
+      const start = opaqueIfEmpty(parseColor(from)) || { r: 0, g: 0, b: 0, a: 1 }
       const [draft, setDraft] = React.useState(start)
       const [text, setText] = React.useState(toHexAlpha(start))
       const [mode, setMode] = React.useState('mixer')
@@ -2006,7 +2050,8 @@ window.__ModuleLoader__.load({
           (target.scope === 'pseudo' ? ' ' + target.label : '') +
           (target.scope === 'child' ? ' · ' + t('childPaint') + ' ' + target.label : '') +
           (target.scope === 'ancestor' ? ' · ' + t('ancestorPaint') + ' ' + target.label : '') +
-          (entry.clearImage === true ? ' · ' + t('withImage') : '')
+          (entry.clearImage === true ? ' · ' + t('withImage') : '') +
+          (entry.transparentSelf === true ? ' · ' + t('transparentRow') : '')
         const active = editing === rowKey
         const achieved = rule === null ? null : effectiveColor(selected, entry, target)
         const overridden = rule !== null && achieved !== null &&
@@ -2874,7 +2919,7 @@ window.__ModuleLoader__.load({
      * this file that can be tested without a DOM.
      */
     if (globalThis.__DSH_COLORIZE_TEST__ === true) {
-      exports.__internals = { parseColor, toHex, toHexAlpha, toCss, carriesAlpha, colorKey, ruleId }
+      exports.__internals = { parseColor, toHex, toHexAlpha, toCss, carriesAlpha, colorKey, ruleId, alphaForEdit, opaqueIfEmpty }
     }
 
     exports.inject = ['slots', 'theme', 'locale']
