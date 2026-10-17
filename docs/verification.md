@@ -82,6 +82,29 @@ localStorage.getItem('dsh-colorize:v1')
 | 自己画背景的元素（如 `div.<x>_root`） | 只有一行 `背景`，不会多出「当前透明」 |
 | 透明容器 + 铺满且上色的子元素 | 出现 `背景 · 子元素 div.<x>_card`（旧优先级没被破坏） |
 
+### 目标（选择器）手动重匹配（0.5.5 起，回归必测）
+
+面板的 `目标` 是输入框（`.dscz-target`）。用原生 value setter 改值后 `blur()`（等价于回车 / 离开输入框）：
+
+| 输入 | 期望（0.5.5 实测值） |
+| --- | --- |
+| `.wSkVaW_root` | `state().selected.selector` 变成 `.wSkVaW_root`、`匹配 1 个`、行重检；在该行改背景 → 规则 `.wSkVaW_root { background-color: #123456 !important; }`，祖先算得 `rgb(18, 52, 86)` |
+| `button` | `匹配 38 个`，行按第一个按钮重检（规则作用于整批） |
+| `div[` | 输入框 `.dscz-target-bad` + `选择器语法无效`；`selected.selector` 不变 |
+| `.definitely-not-here` | `没有元素匹配这个选择器`；选择不变 |
+| `   `（空白） | `选择器不能为空`；选择不变 |
+| 输入框里按 `Esc` | 文本还原成当前选择器，**面板仍打开** |
+| 输入框外按 `Esc` | 面板关闭，`selected = null` |
+
+### 面板不出屏幕（0.5.5 起，贴边取色必测）
+
+| 操作 | 期望（0.5.5 实测值） |
+| --- | --- |
+| 拾取贴视口底部的元素（如侧边栏底部按钮组） | 面板矩形完全在视口内 |
+| 再打开 `调色盘` | 面板自动上移，仍完全在内，编辑器可见（0.5.4：bottom 超出 136px） |
+| 把视口压到 320px 宽（DevTools device 或 `emulate`） | 面板宽度收到 `视口-16`，`[8, 8, 312, 452]`，内部可滚动，无横向溢出 |
+| 面板开着时拉动窗口 / 滚动页面 | 面板跟随元素，且始终在视口内 |
+
 ### 拾色性能
 
 `window.__dshColorize.pickPerf()` 不是 API；性能用 DevTools Performance 面板量：

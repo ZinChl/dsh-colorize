@@ -51,7 +51,7 @@ window.__ModuleLoader__.load({
     const PACKAGE_ID = 'dsh-colorize'
     const NS = 'colorize'
     /** Shown in the panel header so it is obvious which build the page is running. */
-    const VERSION = '0.5.4'
+    const VERSION = '0.5.5'
     const STORAGE_KEY = 'dsh-colorize:v1'
     const MARK = 'data-dsh-colorize'
     const Z_LAYER = 2147483000
@@ -117,6 +117,10 @@ window.__ModuleLoader__.load({
       reset: '重置',
       noColors: '这个元素没有可调的颜色属性',
       noTarget: '没有选中元素',
+      targetHint: '可直接编辑选择器；回车或离开输入框后重新匹配',
+      targetEmpty: '选择器不能为空',
+      targetInvalid: '选择器语法无效',
+      targetNoMatch: '没有元素匹配这个选择器',
       undo: '撤销',
       clearAll: '全部清除',
       data: '导出 / 导入',
@@ -188,6 +192,10 @@ window.__ModuleLoader__.load({
       reset: 'Reset',
       noColors: 'This element has no color property to edit',
       noTarget: 'No element selected',
+      targetHint: 'Edit the selector directly; press Enter or leave the field to re-match',
+      targetEmpty: 'The selector cannot be empty',
+      targetInvalid: 'Invalid selector syntax',
+      targetNoMatch: 'No element matches this selector',
       undo: 'Undo',
       clearAll: 'Clear all',
       data: 'Export / import',
@@ -1068,8 +1076,16 @@ window.__ModuleLoader__.load({
       return null
     }
 
-    function inspectElement(el) {
-      const base = buildSelector(el)
+    /**
+     * @param el - element to inspect.
+     * @param selectorOverride - use this selector instead of the auto-built one. Needed when
+     *   the user re-targets the panel by typing a selector themselves: every row's rule must
+     *   be written against the selector they typed, not against a fresh auto guess.
+     */
+    function inspectElement(el, selectorOverride) {
+      const base = typeof selectorOverride === 'string' && selectorOverride !== ''
+        ? selectorOverride
+        : buildSelector(el)
       const cs = window.getComputedStyle(el)
       const self = { selector: base, label: null, scope: 'self' }
       const props = collectColorProps(cs, self)
@@ -1168,6 +1184,42 @@ window.__ModuleLoader__.load({
       }
       store.picking = false
       emit()
+    }
+
+    /**
+     * Re-target the panel to a selector the user typed in the 目标 field.
+     *
+     * The auto-built selector is a best guess: DSH can rename a class between versions, or
+     * the element the user wants to affect is "the same thing" as its siblings. Re-picking
+     * is the only workaround if the guess is wrong, so the 目标 field is editable and
+     * re-matches here. The typed selector is used verbatim for every rule, and the panel
+     * shows how many elements it matches.
+     *
+     * @returns {{ok: true, matches: number} | {ok: false, reason: 'empty'|'invalid'|'nomatch'}}
+     */
+    function retargetSelector(raw) {
+      const text = String(raw === undefined || raw === null ? '' : raw).trim()
+      if (text === '') return { ok: false, reason: 'empty' }
+      let list = null
+      try {
+        list = document.querySelectorAll(text)
+      } catch (error) {
+        return { ok: false, reason: 'invalid' }
+      }
+      if (list.length === 0) return { ok: false, reason: 'nomatch' }
+      const el = list[0]
+      const info = inspectElement(el, text)
+      store.selected = {
+        el,
+        selector: text,
+        label: describe(el),
+        props: info.props,
+        tokenMatch: info.tokenMatch,
+        matches: list.length,
+      }
+      store.picking = false
+      emit()
+      return { ok: true, matches: list.length }
     }
 
     function clearSelection() {
@@ -1286,6 +1338,7 @@ window.__ModuleLoader__.load({
       '  border: 1px solid var(--dsw-alias-border-l2, rgba(255,255,255,.18)); box-shadow: 0 8px 24px rgba(0,0,0,.3); }',
       /* the floating panel */
       '.dscz-panel { position: fixed; z-index: ' + (Z_LAYER + 1) + '; width: 324px; max-height: 74vh; overflow: auto;',
+      '  max-width: calc(100vw - 16px);',
       '  pointer-events: auto; box-sizing: border-box; padding: 10px 12px 12px;',
       '  border-radius: var(--dsw-radius-lg, 10px); font-size: 12px; line-height: 1.5; font-family: inherit;',
       '  background: var(--dsw-alias-bg-overlay, #1b1d21); color: var(--dsw-alias-label-primary, #eceff3);',
@@ -1293,6 +1346,15 @@ window.__ModuleLoader__.load({
       '.dscz-panel * { box-sizing: border-box; }',
       '.dscz-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }',
       '.dscz-title { font-weight: 600; font-size: 12.5px; flex: 1; }',
+      /* 目标：可编辑并重新匹配的选择器 */
+      '.dscz-target { flex: 1; min-width: 0; padding: 2px 5px; font: 11px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;',
+      '  color: inherit; border-radius: var(--dsw-radius-sm, 5px);',
+      '  background: var(--dsw-alias-bg-layer-2, rgba(255,255,255,.06));',
+      '  border: 1px solid var(--dsw-alias-border-l1, rgba(255,255,255,.14)); }',
+      '.dscz-target:focus { outline: none; border-color: var(--dsw-alias-brand-primary, #6b8afd); }',
+      '.dscz-target-bad { border-color: var(--dsw-alias-state-error-primary, #f25a5a); }',
+      '.dscz-target-error { margin: 2px 0 0 70px; font-size: 11px;',
+      '  color: var(--dsw-alias-state-error-primary, #f25a5a); }',
       '.dscz-sec { margin-top: 10px; padding-top: 8px;',
       '  border-top: 1px solid var(--dsw-alias-border-l1, rgba(255,255,255,.1)); }',
       '.dscz-sec-label { font-size: 11px; letter-spacing: .04em; text-transform: uppercase;',
@@ -1727,6 +1789,8 @@ window.__ModuleLoader__.load({
       const [editing, setEditing] = React.useState(null)
       /** Which range each row will edit: self / same-class group / self + descendants. */
       const [scopes, setScopes] = React.useState({})
+      /** Why the last manual 目标 selector was rejected ('' = fine). */
+      const [targetError, setTargetError] = React.useState('')
       const origin = React.useRef(null)
       const closeEditor = () => {
         setEditing(null)
@@ -1747,6 +1811,28 @@ window.__ModuleLoader__.load({
         }
         closeEditor()
       }
+
+      /**
+       * Commit the 目标 field: re-target the panel to the selector the user typed.
+       * A rejected selector leaves the current selection untouched and shows why inline.
+       */
+      const applyTarget = (raw) => {
+        const result = retargetSelector(raw)
+        if (result.ok === true) {
+          setTargetError('')
+          setScopes({})
+          closeEditor()
+          return
+        }
+        setTargetError(t(
+          result.reason === 'invalid'
+            ? 'targetInvalid'
+            : result.reason === 'empty' ? 'targetEmpty' : 'targetNoMatch',
+        ))
+      }
+      React.useEffect(() => {
+        setTargetError('')
+      }, [state.selected === null ? null : state.selected.selector])
 
       const hostRef = React.useRef(null)
       const boxRef = React.useRef(null)
@@ -1834,20 +1920,85 @@ window.__ModuleLoader__.load({
         }
       }, [])
 
+      const lastPlace = React.useRef('')
+
+      /**
+       * Put the panel next to its element **without ever letting it leave the viewport**.
+       *
+       * The panel's height changes after it is placed — opening the 调色盘 / 混合器 editor adds
+       * a few hundred pixels, token rows and scope chips do the same — so a placement computed
+       * while the panel was short (element near the bottom edge) used to leave the grown panel
+       * hanging past the bottom of the window: the editor and 应用 / 取消 were literally
+       * off-screen. Now every call re-reads the real size, flips above the element when it
+       * cannot fit below, and clamps both axes inside the viewport with an 8px margin.
+       */
       const placePanel = React.useCallback(() => {
         const panel = panelRef.current
         const selected = store.selected
-        if (panel === null || selected === null || !selected.el.isConnected) return
+        if (panel === null || selected === null) return
+        if (selected.el === null || selected.el.isConnected !== true) return
+        const margin = 8
+        const maxHeight = Math.max(160, Math.round(window.innerHeight - margin * 2))
+        panel.style.maxHeight = Math.min(Math.round(window.innerHeight * 0.74), maxHeight) + 'px'
+        panel.style.maxWidth = Math.max(160, Math.round(window.innerWidth - margin * 2)) + 'px'
         const rect = selected.el.getBoundingClientRect()
         const width = panel.offsetWidth || 324
         const height = panel.offsetHeight || 260
-        const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))
+        let left = Math.min(rect.left, window.innerWidth - width - margin)
+        left = Math.max(margin, left)
         let top = rect.bottom + 10
-        if (top + height > window.innerHeight - 8) top = Math.max(8, rect.top - height - 10)
-        panel.style.left = left + 'px'
-        panel.style.top = top + 'px'
+        if (top + height > window.innerHeight - margin) top = rect.top - height - 10
+        top = Math.max(margin, Math.min(top, window.innerHeight - height - margin))
+        const key = [left, top, width, height, window.innerWidth, window.innerHeight].join(',')
+        if (lastPlace.current !== key) {
+          lastPlace.current = key
+          panel.style.left = left + 'px'
+          panel.style.top = top + 'px'
+        }
         paintBox(selected.el)
       }, [paintBox])
+
+      /** Coalesce placement requests to one rAF (layout reads stay off the render path). */
+      const placeFrame = React.useRef(0)
+      const schedulePlace = React.useCallback(() => {
+        if (placeFrame.current !== 0) return
+        placeFrame.current = window.requestAnimationFrame(() => {
+          placeFrame.current = 0
+          placePanel()
+        })
+      }, [placePanel])
+
+      React.useEffect(() => () => {
+        if (placeFrame.current !== 0) window.cancelAnimationFrame(placeFrame.current)
+        placeFrame.current = 0
+      }, [])
+
+      /**
+       * Re-place after **every** render while the panel is open: the editor opening/closing
+       * changes the panel's height, and a stale height is what pushed the palette off-screen.
+       */
+      React.useEffect(() => {
+        if (state.selected === null || state.picking === true) return
+        schedulePlace()
+      })
+
+      /**
+       * Keep the editor visible inside the panel when it opens: on a tall panel placed against
+       * the bottom edge the freshly opened 调色盘 can otherwise sit below the panel's scroll
+       * window, which looks like "the palette is cut off".
+       */
+      React.useEffect(() => {
+        if (editing === null) return
+        const panel = panelRef.current
+        if (panel === null) return
+        const editor = panel.querySelector('[data-dsh-colorize="editor"]')
+        if (editor === null || typeof editor.scrollIntoView !== 'function') return
+        try {
+          editor.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+        } catch (error) {
+          /* older engines: the panel scroll is still usable by hand */
+        }
+      }, [editing])
 
       /* --- pick mode: four listeners, added and removed with the mode --- */
 
@@ -1948,6 +2099,13 @@ window.__ModuleLoader__.load({
         const onKey = (event) => {
           if (event.key !== 'Escape' || event.repeat === true) return
           if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return
+          // Escape inside one of our own fields cancels that field, it must not close the
+          // whole panel: the 目标 input is editable now, and capture on window runs before
+          // the input's own handler — without this guard typing then pressing Escape threw
+          // the panel away instead of reverting the text.
+          const target = event.target
+          const tag = target !== null && target.tagName ? String(target.tagName).toLowerCase() : ''
+          if (tag === 'input' || tag === 'textarea' || tag === 'select') return
           event.preventDefault()
           event.stopPropagation()
           clearSelection()
@@ -1958,19 +2116,11 @@ window.__ModuleLoader__.load({
 
       React.useEffect(() => {
         if (state.selected === null) return undefined
-        let frame = 0
-        const schedule = () => {
-          if (frame !== 0) return
-          frame = window.requestAnimationFrame(() => {
-            frame = 0
-            placePanel()
-          })
-        }
+        const schedule = () => schedulePlace()
         window.addEventListener('scroll', schedule, true)
         window.addEventListener('resize', schedule, true)
         schedule()
         return () => {
-          if (frame !== 0) window.cancelAnimationFrame(frame)
           window.removeEventListener('scroll', schedule, true)
           window.removeEventListener('resize', schedule, true)
         }
@@ -2240,10 +2390,39 @@ window.__ModuleLoader__.load({
             'div',
             { className: 'dscz-row' },
             h('span', { className: 'dscz-row-label' }, t('target')),
-            h('span', { className: 'dscz-mono dscz-ellipsis', title: selected.selector },
-              selected.selector || t('noTarget')),
+            h('input', {
+              // Uncontrolled + remount on target change: the field must keep whatever the
+              // user is typing (including an invalid selector they are still fixing), but
+              // follow the selection when it changes from elsewhere (re-pick / 应用).
+              key: 'target:' + selected.selector,
+              className: 'dscz-target' + (targetError === '' ? '' : ' dscz-target-bad'),
+              defaultValue: selected.selector || '',
+              placeholder: t('noTarget'),
+              spellCheck: false,
+              title: t('targetHint'),
+              onKeyDown: (event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  event.currentTarget.blur()
+                } else if (event.key === 'Escape') {
+                  event.preventDefault()
+                  event.currentTarget.value = selected.selector || ''
+                  setTargetError('')
+                  event.currentTarget.blur()
+                }
+              },
+              onBlur: (event) => {
+                const next = event.currentTarget.value
+                if (next.trim() === (selected.selector || '')) {
+                  setTargetError('')
+                  return
+                }
+                applyTarget(next)
+              },
+            }),
             h('span', { className: 'dscz-muted' }, t('matches').replace('{n}', String(selected.matches))),
           ),
+          targetError === '' ? null : h('div', { className: 'dscz-target-error' }, targetError),
           selected.props.length === 0
             ? h('div', { className: 'dscz-muted' }, t('noColors'))
             : h(

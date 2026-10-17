@@ -24,6 +24,8 @@ zero-size React mount.
 | **Recolor** | The panel lists the colours that are actually in effect: background / text / border (merged when all four sides match) / SVG fill & stroke |
 | **Two pickers** | **Palette** (OS picker + eyedropper + 15 presets) and **Mixer** (R/G/B/A sliders + HEX), sharing one 应用 / 取消 footer |
 | **Inline editing** | Every row edits `HEX` and opacity (0–100) in place, no editor needed. Opacity survives a hex edit, and a translucent colour shows as `#rrggbbaa` |
+| **Editable target** | The `目标` field is an editable selector: press Enter (or leave the field) to re-match. Rules are written against the selector you typed, the match count updates, and an invalid / empty / zero-match selector is reported inline without losing the current selection |
+| **Stays on screen** | The panel re-places itself after every content change, clamps both axes inside the viewport (flipping above the element when needed), caps its own size to the viewport and scrolls internally — picking near an edge no longer leaves the palette buttons off-screen |
 | **Bulk** | Scope: this element / N same-class / element + descendants — existing rules move with the scope |
 | **Semantic colours** | When a colour equals a `--dsw-alias-*` token, editing it goes through `theme.overrideTokens`, so the whole UI follows |
 | **Background triage** | Rows for 「含背景图」, `::before` / `::after`, the visible ancestor, and the covering child. A transparent element still gets its own `背景 · 当前透明` row, so its background is always editable |
