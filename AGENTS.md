@@ -39,11 +39,14 @@
    打开取色器时 `scrollIntoView`。只在「选中元素 + scroll/resize」时算一次的话，贴边取色会顶出屏幕。
 8. **手动改的目标必须被尊重**：`目标` 是输入框，重匹配走 `inspectElement(el, selectorOverride)`，
    行的规则**写用户输入的选择器**，不许回退到 `buildSelector`。非法 / 零匹配只显示行内说明，不动当前选择。
-   窗口捕获的「Esc 关面板」必须跳过 `input / textarea / select`，否则在输入框里取消输入会把面板关掉。
-9. **`client.js` 的 `VERSION` 必须等于 `package.json` 的 version**：面板标题读它，这是「页面里装的哪个构建」
-   的唯一线索。`npm run check:manifest` 会拦。
-10. **两份 locale 的键必须一一对应**，`files` 必须覆盖所有会发布的东西。
-11. **别把 `web:linux` 的默认键位加回来**：DSH 只放行三种组合且都被官方命令占了，
+   **放宽选择器时只要 `store.selected.el` 仍 matches，就继续用它**（不许改成 `list[0]`）——
+   否则用户看到的是「面板跳到了第一个匹配元素」。窗口捕获的「Esc 关面板」必须跳过 `input / textarea / select`。
+9. **手动拖拽优先于自动摆放**：标题栏拖动写 `manualPos`，此后 `placePanel` 只夹边、不再按元素摆放；
+   拖动要 pointer capture + 视口夹边，标题栏上的按钮按下不触发拖动；换目标时清空 `manualPos` 恢复自动摆放。
+10. **`client.js` 的 `VERSION` 必须等于 `package.json` 的 version**：面板标题读它，这是「页面里装的哪个构建」
+    的唯一线索。`npm run check:manifest` 会拦。
+11. **两份 locale 的键必须一一对应**，`files` 必须覆盖所有会发布的东西。
+12. **别把 `web:linux` 的默认键位加回来**：DSH 只放行三种组合且都被官方命令占了，
     `register()` 会原子校验所有平台的默认键位 —— 一个不合法默认值会让整条命令注册失败。
     Windows/中文 IME 下 `Alt+Shift` 是输入法切换，也不要当默认键。
 

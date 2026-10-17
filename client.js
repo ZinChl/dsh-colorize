@@ -51,7 +51,7 @@ window.__ModuleLoader__.load({
     const PACKAGE_ID = 'dsh-colorize'
     const NS = 'colorize'
     /** Shown in the panel header so it is obvious which build the page is running. */
-    const VERSION = '0.5.5'
+    const VERSION = '0.5.6'
     const STORAGE_KEY = 'dsh-colorize:v1'
     const MARK = 'data-dsh-colorize'
     const Z_LAYER = 2147483000
@@ -118,6 +118,7 @@ window.__ModuleLoader__.load({
       noColors: '这个元素没有可调的颜色属性',
       noTarget: '没有选中元素',
       targetHint: '可直接编辑选择器；回车或离开输入框后重新匹配',
+      dragHint: '按住标题栏拖动面板',
       targetEmpty: '选择器不能为空',
       targetInvalid: '选择器语法无效',
       targetNoMatch: '没有元素匹配这个选择器',
@@ -193,6 +194,7 @@ window.__ModuleLoader__.load({
       noColors: 'This element has no color property to edit',
       noTarget: 'No element selected',
       targetHint: 'Edit the selector directly; press Enter or leave the field to re-match',
+      dragHint: 'Press and drag the title bar to move the panel',
       targetEmpty: 'The selector cannot be empty',
       targetInvalid: 'Invalid selector syntax',
       targetNoMatch: 'No element matches this selector',
@@ -1195,6 +1197,12 @@ window.__ModuleLoader__.load({
      * re-matches here. The typed selector is used verbatim for every rule, and the panel
      * shows how many elements it matches.
      *
+     * Widening the selector must **not** move the panel: if the element the user picked still
+     * matches the typed selector, that element stays the one being inspected (and outlined).
+     * Only when it no longer matches does the first match take over — otherwise typing
+     * `.sessionRow` to affect every row would silently jump the panel (and every row's colours)
+     * to whichever row happens to be first in the document.
+     *
      * @returns {{ok: true, matches: number} | {ok: false, reason: 'empty'|'invalid'|'nomatch'}}
      */
     function retargetSelector(raw) {
@@ -1207,7 +1215,16 @@ window.__ModuleLoader__.load({
         return { ok: false, reason: 'invalid' }
       }
       if (list.length === 0) return { ok: false, reason: 'nomatch' }
-      const el = list[0]
+      const previous = store.selected === null ? null : store.selected.el
+      let keepPrevious = false
+      if (previous !== null && previous.isConnected === true && typeof previous.matches === 'function') {
+        try {
+          keepPrevious = previous.matches(text)
+        } catch (error) {
+          keepPrevious = false
+        }
+      }
+      const el = keepPrevious ? previous : list[0]
       const info = inspectElement(el, text)
       store.selected = {
         el,
@@ -1345,6 +1362,11 @@ window.__ModuleLoader__.load({
       '  border: 1px solid var(--dsw-alias-border-l2, rgba(255,255,255,.18)); box-shadow: 0 14px 40px rgba(0,0,0,.38); }',
       '.dscz-panel * { box-sizing: border-box; }',
       '.dscz-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }',
+      /* 拖动区域：标题栏（按钮除外），按住可移动面板 */
+      '.dscz-head { cursor: grab; user-select: none; touch-action: none; }',
+      '.dscz-head:active { cursor: grabbing; }',
+      '.dscz-grip { flex: none; font-size: 13px; line-height: 1; letter-spacing: -1px;',
+      '  color: var(--dsw-alias-label-tertiary, #7f8287); }',
       '.dscz-title { font-weight: 600; font-size: 12.5px; flex: 1; }',
       /* 目标：可编辑并重新匹配的选择器 */
       '.dscz-target { flex: 1; min-width: 0; padding: 2px 5px; font: 11px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;',
@@ -1921,6 +1943,13 @@ window.__ModuleLoader__.load({
       }, [])
 
       const lastPlace = React.useRef('')
+      /**
+       * Set once the user drags the panel by its title bar. From then on the panel keeps that
+       * position (still clamped into the viewport) instead of snapping back next to the
+       * element — the auto placement keeps running, it just stops moving a dragged panel.
+       * Reset when the target changes, so picking a new element auto-places again.
+       */
+      const manualPos = React.useRef(null)
 
       /**
        * Put the panel next to its element **without ever letting it leave the viewport**.
@@ -1941,14 +1970,22 @@ window.__ModuleLoader__.load({
         const maxHeight = Math.max(160, Math.round(window.innerHeight - margin * 2))
         panel.style.maxHeight = Math.min(Math.round(window.innerHeight * 0.74), maxHeight) + 'px'
         panel.style.maxWidth = Math.max(160, Math.round(window.innerWidth - margin * 2)) + 'px'
-        const rect = selected.el.getBoundingClientRect()
         const width = panel.offsetWidth || 324
         const height = panel.offsetHeight || 260
-        let left = Math.min(rect.left, window.innerWidth - width - margin)
-        left = Math.max(margin, left)
-        let top = rect.bottom + 10
-        if (top + height > window.innerHeight - margin) top = rect.top - height - 10
-        top = Math.max(margin, Math.min(top, window.innerHeight - height - margin))
+        let left = 0
+        let top = 0
+        if (manualPos.current !== null) {
+          // 拖拽过就守住用户放的位置，只在越界时拉回视口内。
+          left = Math.max(margin, Math.min(manualPos.current.left, window.innerWidth - width - margin))
+          top = Math.max(margin, Math.min(manualPos.current.top, window.innerHeight - height - margin))
+        } else {
+          const rect = selected.el.getBoundingClientRect()
+          left = Math.min(rect.left, window.innerWidth - width - margin)
+          left = Math.max(margin, left)
+          top = rect.bottom + 10
+          if (top + height > window.innerHeight - margin) top = rect.top - height - 10
+          top = Math.max(margin, Math.min(top, window.innerHeight - height - margin))
+        }
         const key = [left, top, width, height, window.innerWidth, window.innerHeight].join(',')
         if (lastPlace.current !== key) {
           lastPlace.current = key
@@ -1999,6 +2036,70 @@ window.__ModuleLoader__.load({
           /* older engines: the panel scroll is still usable by hand */
         }
       }, [editing])
+
+      /**
+       * Drag the panel by its title bar.
+       *
+       * The panel is deliberately `position: fixed` with everything else moving through
+       * transforms, so a manual drag just writes left/top. Pointer events + capture keep the
+       * drag alive when the pointer leaves the panel; the position is clamped into the viewport
+       * on every move so the panel can never be parked off-screen, and `manualPos` tells the
+       * auto placement to stop snapping it back.
+       *
+       * Buttons inside the bar keep working: a pointerdown that starts on an interactive
+       * control is ignored here.
+       */
+      const dragState = React.useRef(null)
+      const onDragStart = React.useCallback((event) => {
+        if (event.pointerType === 'mouse' && event.button !== 0) return
+        const target = event.target
+        if (target !== null && typeof target.closest === 'function' &&
+          target.closest('button, input, select, textarea, a')) return
+        const panel = panelRef.current
+        if (panel === null) return
+        const rect = panel.getBoundingClientRect()
+        dragState.current = {
+          id: event.pointerId,
+          dx: event.clientX - rect.left,
+          dy: event.clientY - rect.top,
+        }
+        manualPos.current = { left: rect.left, top: rect.top }
+        try {
+          event.currentTarget.setPointerCapture(event.pointerId)
+        } catch (error) {
+          /* synthetic / stale pointer id: the move handler still works */
+        }
+        event.preventDefault()
+      }, [])
+      const onDragMove = React.useCallback((event) => {
+        const drag = dragState.current
+        if (drag === null || drag.id !== event.pointerId) return
+        const panel = panelRef.current
+        if (panel === null) return
+        const margin = 8
+        const width = panel.offsetWidth || 324
+        const height = panel.offsetHeight || 260
+        const left = Math.max(margin, Math.min(event.clientX - drag.dx, window.innerWidth - width - margin))
+        const top = Math.max(margin, Math.min(event.clientY - drag.dy, window.innerHeight - height - margin))
+        manualPos.current = { left, top }
+        lastPlace.current = ''
+        panel.style.left = left + 'px'
+        panel.style.top = top + 'px'
+      }, [])
+      const onDragEnd = React.useCallback((event) => {
+        if (dragState.current === null) return
+        dragState.current = null
+        try {
+          event.currentTarget.releasePointerCapture(event.pointerId)
+        } catch (error) {
+          /* capture already gone */
+        }
+      }, [])
+
+      /** A new target auto-places again (a dragged position is per-element). */
+      React.useEffect(() => {
+        manualPos.current = null
+      }, [state.selected === null ? null : state.selected.selector])
 
       /* --- pick mode: four listeners, added and removed with the mode --- */
 
@@ -2380,7 +2481,15 @@ window.__ModuleLoader__.load({
           { className: 'dscz-panel', ref: panelRef, [MARK]: 'panel', style: PANEL_STYLE },
           h(
             'div',
-            { className: 'dscz-head' },
+            {
+              className: 'dscz-head',
+              title: t('dragHint'),
+              onPointerDown: onDragStart,
+              onPointerMove: onDragMove,
+              onPointerUp: onDragEnd,
+              onPointerCancel: onDragEnd,
+            },
+            h('span', { className: 'dscz-grip', 'aria-hidden': 'true' }, '⠿'),
             h('span', { className: 'dscz-title' }, t('title'),
               h('span', { className: 'dscz-version' }, 'v' + VERSION)),
             h(Button, { small: true, onClick: () => setPicking(true) }, t('repick')),
